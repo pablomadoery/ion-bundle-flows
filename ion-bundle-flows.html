@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ION DTN — Interactive Bundle Flow (BP / LTP)</title>
+<style>
+  :root{
+    --orange:#f59a52; --orange-dk:#c46a1f;
+    --blue:#7da7e0; --blue-dk:#3f6fb0;
+    --red:#ef5347; --pink:#f5a8a8;
+    --cyl:#7f7f7f; --cyl-dk:#3f3f3f;
+    --hl:#ff4d00;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:"Segoe UI",system-ui,Helvetica,Arial,sans-serif;
+    background:#eef1f5; color:#23272e; display:flex; min-height:100vh;
+  }
+  #diagram-pane{
+    flex:1 1 auto; display:flex; align-items:center; justify-content:center;
+    padding:14px; min-width:0;
+  }
+  #diagram-pane svg{
+    width:100%; height:auto; max-height:96vh;
+    background:#fff; border-radius:10px;
+    box-shadow:0 2px 14px rgba(0,0,0,.12);
+  }
+  #side{
+    flex:0 0 390px; max-width:390px; background:#1d2530; color:#e8edf3;
+    padding:18px 20px; overflow-y:auto; max-height:100vh;
+  }
+  h1{font-size:17px; margin:0 0 4px}
+  .sub{font-size:12px; color:#9fb0c3; margin:0 0 14px; line-height:1.45}
+  .flowbtns{display:flex; flex-direction:column; gap:7px; margin-bottom:14px}
+  .flowbtns button{
+    text-align:left; padding:9px 12px; border:1px solid #38465a; border-radius:8px;
+    background:#26303e; color:#e8edf3; font-size:13px; cursor:pointer; line-height:1.3;
+  }
+  .flowbtns button small{display:block; color:#9fb0c3; font-size:11px}
+  .flowbtns button:hover{background:#2e3a4b}
+  .flowbtns button.sel{background:#3b5b86; border-color:#6ea0dc}
+  .controls{display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap}
+  .controls button{
+    background:#26303e; color:#e8edf3; border:1px solid #38465a; border-radius:6px;
+    padding:6px 11px; font-size:13px; cursor:pointer;
+  }
+  .controls button:hover{background:#2e3a4b}
+  .controls button:disabled{opacity:.35; cursor:default}
+  .speed{display:flex; align-items:center; gap:6px; font-size:11px; color:#9fb0c3}
+  .speed input{width:90px}
+  #stepbox{
+    background:#26303e; border:1px solid #38465a; border-radius:8px;
+    padding:12px 14px; min-height:118px; margin-bottom:12px;
+  }
+  #stepnum{font-size:11px; color:#82c7ff; letter-spacing:.5px; text-transform:uppercase}
+  #steptitle{font-size:14px; font-weight:600; margin:3px 0 6px}
+  #stepdesc{font-size:12.5px; line-height:1.5; color:#c9d4e0}
+  ol#steplist{margin:0 0 16px; padding-left:22px; font-size:12px; color:#9fb0c3}
+  ol#steplist li{margin:3px 0; cursor:pointer; line-height:1.35}
+  ol#steplist li:hover{color:#e8edf3}
+  ol#steplist li.cur{color:#ffd479; font-weight:600}
+  details{margin-bottom:12px; font-size:12px}
+  details summary{cursor:pointer; font-weight:600; font-size:13px; margin-bottom:6px; color:#cfe0f2}
+  details p{line-height:1.5; color:#b6c2d0; margin:6px 0}
+  .legend{display:grid; grid-template-columns:18px 1fr; gap:5px 9px; font-size:11.5px; color:#b6c2d0; align-items:center}
+  .sw{width:18px; height:13px; border-radius:2px; border:1px solid rgba(0,0,0,.4)}
+  code{background:#11161d; padding:1px 5px; border-radius:4px; font-size:11.5px; color:#9fd0ff}
+
+  /* SVG component styling */
+  text{font-family:"Segoe UI",Helvetica,Arial,sans-serif; pointer-events:none}
+  .comp rect,.comp ellipse,.comp path.cylbody{transition:filter .25s, stroke .25s}
+  .comp.hl{filter:drop-shadow(0 0 7px rgba(255,77,0,.95))}
+  .comp.hl rect, .comp.hl ellipse, .comp.hl path.cylbody{stroke:var(--hl); stroke-width:2.5px}
+  .comp.dim{opacity:.85}
+  .wire{stroke:#777; stroke-width:1.4; fill:none}
+  .wire.dash{stroke-dasharray:6 5}
+  .dbox{fill:none; stroke:#555; stroke-width:1.2; stroke-dasharray:5 4}
+  .dlabel{font-size:13px; fill:#222}
+  #token{filter:drop-shadow(0 0 6px rgba(255,200,0,1)); visibility:hidden}
+  @media (max-width:980px){ body{flex-direction:column} #side{flex:none; max-width:none; max-height:none} }
+</style>
+</head>
+<body>
+
+<div id="diagram-pane">
+<svg viewBox="0 0 960 665" xmlns="http://www.w3.org/2000/svg" aria-label="ION BP/LTP data flow diagram">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="8" refX="7.5" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#666"/>
+    </marker>
+  </defs>
+
+  <!-- ====== static wiring (arrows) ====== -->
+  <g id="wires">
+    <path class="wire" d="M406,98 L401,178" marker-end="url(#arr)"/>
+    <path class="wire" d="M90,178 L90,250 L191,250" marker-end="url(#arr)"/>
+    <path class="wire" d="M90,345 L90,253"/>
+    <path class="wire" d="M354,210 L240,210 L240,231" marker-end="url(#arr)"/>
+    <path class="wire" d="M285,257 L400,257 L400,263" marker-end="url(#arr)"/>
+    <path class="wire" d="M354,295 L240,295 L240,311" marker-end="url(#arr)"/>
+    <path class="wire" d="M285,337 L400,337 L400,348" marker-end="url(#arr)"/>
+    <path class="wire" d="M400,410 L400,486" marker-end="url(#arr)"/>
+    <path class="wire" d="M445,510 L505,510 L505,414" marker-end="url(#arr)"/>
+    <path class="wire" d="M545,410 L545,526" marker-end="url(#arr)"/>
+    <path class="wire" d="M580,550 L650,550 L650,414" marker-end="url(#arr)"/>
+    <path class="wire" d="M680,410 L680,596" marker-end="url(#arr)"/>
+    <path class="wire dash" d="M705,620 L731,620" marker-end="url(#arr)"/>
+    <path class="wire" d="M772,600 L772,440 L810,440 L810,414" marker-end="url(#arr)"/>
+    <path class="wire" d="M848,410 L848,481" marker-end="url(#arr)"/>
+    <path class="wire" d="M884,505 L908,505 L908,175 L840,175" marker-end="url(#arr)"/>
+    <path class="wire" d="M884,517 L922,517 L922,210 L450,210" marker-end="url(#arr)"/>
+    <path class="wire" d="M790,145 L790,76 L578,76" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- ====== dashed containers ====== -->
+  <g class="comp" id="rtdb">
+    <rect class="dboxr" x="15" y="58" width="150" height="120" fill="none" stroke="#555" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <text class="dlabel" x="28" y="76">routing table</text>
+  </g>
+  <g class="comp" id="fwddb">
+    <rect x="15" y="345" width="150" height="130" fill="none" stroke="#555" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <text class="dlabel" x="22" y="363">forwarding database</text>
+  </g>
+  <rect class="dbox" x="340" y="127" width="575" height="332"/>
+  <text class="dlabel" x="468" y="150">traffic database</text>
+
+  <!-- groups for cylinders & boxes get injected here by JS -->
+  <g id="shapes"></g>
+
+  <!-- moving bundle token -->
+  <circle id="token" r="8" fill="#ffd23d" stroke="#b8860b" stroke-width="2"/>
+</svg>
+</div>
+
+<div id="side">
+  <h1>ION DTN — Bundle Data Flow</h1>
+  <p class="sub">Bundle Protocol over LTP inside one ION node, per the
+    <a href="https://ion-dtn.readthedocs.io/en/ion-open-source-4.1.4/ION-Guide/" style="color:#82c7ff">ION 4.1.4 Design &amp; Operation guide</a>.
+    Pick a scenario to watch a bundle (the glowing dot) move through the daemons and SDR queues.</p>
+
+  <div class="flowbtns">
+    <button id="fb0" onclick="selectFlow(0)">① Locally generated bundle<small>Application → bp_send() → … → LSO (transmitted to neighbor)</small></button>
+    <button id="fb1" onclick="selectFlow(1)">② Bundle received &amp; forwarded (transit)<small>LSI → ltpcli → forwarding queue → … → LSO (next hop)</small></button>
+    <button id="fb2" onclick="selectFlow(2)">③ Bundle received &amp; delivered locally<small>LSI → ltpcli → delivery queue → bp_receive()</small></button>
+  </div>
+
+  <div class="controls">
+    <button id="prevB" onclick="stepJump(-1)">⏮ Prev</button>
+    <button id="playB" onclick="togglePlay()">⏸ Pause</button>
+    <button id="nextB" onclick="stepJump(1)">Next ⏭</button>
+    <button onclick="restart()">↺ Restart</button>
+    <span class="speed">speed <input type="range" id="speed" min="0.4" max="3" step="0.1" value="1"></span>
+  </div>
+
+  <div id="stepbox">
+    <div id="stepnum">Select a flow above</div>
+    <div id="steptitle">How to use</div>
+    <div id="stepdesc">Choose one of the three bundle scenarios. The animation highlights each component as the bundle passes through it and explains what happens at that stage. You can pause, step manually, or click any step in the list below.</div>
+  </div>
+
+  <ol id="steplist"></ol>
+
+  <details>
+    <summary>Legend</summary>
+    <div class="legend">
+      <div class="sw" style="background:var(--orange)"></div><div>daemon task (forwarder, CL adapter, manager)</div>
+      <div class="sw" style="background:var(--blue)"></div><div>library function / metering task</div>
+      <div class="sw" style="background:var(--red)"></div><div>user application</div>
+      <div class="sw" style="background:var(--pink)"></div><div>link service (UDP, serial, …) under LTP</div>
+      <div class="sw" style="background:var(--cyl); border-radius:7px"></div><div>queue / object in the SDR heap (non-volatile)</div>
+      <div class="sw" style="background:none; border:1.5px dashed #777"></div><div>database boundary (SDR or working memory)</div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>How the architecture works</summary>
+    <p><b>Everything is queues + tiny daemons.</b> ION decomposes bundle processing into small single-purpose tasks (<code>ipnfw</code>, <code>bpclm</code>, <code>ltpclo</code>, <code>ltpmeter</code>, <code>ltpcli</code>…) connected by semaphore-signaled queues in the <b>SDR</b> (Spacecraft/Simple Data Recorder), a notionally non-volatile heap. A bundle survives reboots while it waits — essential when contacts are minutes-to-hours apart.</p>
+    <p><b>Zero-copy objects (ZCO).</b> Payload data is written once into the SDR heap; every stage afterwards passes only a <i>reference</i>. A bundle can simultaneously sit in a delivery queue and a transmission queue without duplication; storage is reclaimed when the last reference is released.</p>
+    <p><b>Routing vs. plans.</b> The <i>routing table</i> (nodes, routes, hops — volatile working memory, built from the contact plan via Contact Graph Routing) answers "which neighbor next?". The <i>forwarding database</i> (plans, rules, groups) answers "which outduct/convergence layer reaches that neighbor?".</p>
+    <p><b>LTP aggregation.</b> Multiple bundles are aggregated into one LTP <i>block</i> (amortizing overhead), then <code>ltpmeter</code> cuts the block into link-sized <i>segments</i>. Red-part segments are retransmitted until the receiver's reports show the block is complete — reliability over one long-delay hop, while BP does store-and-forward end-to-end.</p>
+  </details>
+</div>
+
+<script>
+"use strict";
+const SVGNS = "http://www.w3.org/2000/svg";
+const shapes = document.getElementById("shapes");
+
+function el(name, attrs, parent){
+  const e = document.createElementNS(SVGNS, name);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent||shapes).appendChild(e);
+  return e;
+}
+function txt(x,y,lines,size,fill,anchor,parent){
+  const t = el("text",{x:x,y:y,"font-size":size||12,fill:fill||"#fff","text-anchor":anchor||"middle"},parent);
+  lines.forEach((ln,i)=>{
+    const ts = document.createElementNS(SVGNS,"tspan");
+    ts.setAttribute("x",x); ts.setAttribute("dy", i===0?0:size*1.12);
+    ts.textContent = ln; t.appendChild(ts);
+  });
+  return t;
+}
+// box with label
+function box(id,x,y,w,h,fill,stroke,lines,fsize){
+  const g = el("g",{class:"comp",id:id});
+  el("rect",{x:x,y:y,width:w,height:h,fill:fill,stroke:stroke,"stroke-width":1.4},g);
+  txt(x+w/2, y+h/2 - ((lines.length-1)*(fsize||13)*0.56) + (fsize||13)*0.36, lines, fsize||13, "#1b1b1b", "middle", g);
+  return g;
+}
+// cylinder centered at (cx,cy)
+function cyl(id,cx,cy,rx,h,lines,fsize,parent){
+  const ry=10, top=cy-h/2, bot=cy+h/2;
+  const g = el("g",{class:"comp",id:id},parent||shapes);
+  el("path",{class:"cylbody",
+    d:`M${cx-rx},${top} L${cx-rx},${bot} A${rx},${ry} 0 0 0 ${cx+rx},${bot} L${cx+rx},${top}`,
+    fill:"#7f7f7f",stroke:"#3f3f3f","stroke-width":1.3},g);
+  el("ellipse",{cx:cx,cy:top,rx:rx,ry:ry,fill:"#8d8d8d",stroke:"#3f3f3f","stroke-width":1.3},g);
+  const f=fsize||11.5;
+  txt(cx, cy + 2 - ((lines.length-1)*f*0.56), lines, f, "#fff", "middle", g);
+  return g;
+}
+// small stacked DB cylinders (decorative)
+function dbstack(parentId,cx,cy,lines){
+  const g = document.getElementById(parentId);
+  for(const off of [10,5]){
+    el("path",{d:`M${cx-40+off},${cy-22-off} L${cx-40+off},${cy+14-off} A40,9 0 0 0 ${cx+40+off},${cy+14-off} L${cx+40+off},${cy-22-off}`,
+      fill:"#8a8a8a",stroke:"#3f3f3f","stroke-width":1.1},g);
+    el("ellipse",{cx:cx+off,cy:cy-22-off,rx:40,ry:9,fill:"#999",stroke:"#3f3f3f","stroke-width":1.1},g);
+  }
+  el("path",{class:"cylbody",d:`M${cx-40},${cy-22} L${cx-40},${cy+14} A40,9 0 0 0 ${cx+40},${cy+14} L${cx+40},${cy-22}`,
+    fill:"#7f7f7f",stroke:"#3f3f3f","stroke-width":1.2},g);
+  el("ellipse",{cx:cx,cy:cy-22,rx:40,ry:9,fill:"#8d8d8d",stroke:"#3f3f3f","stroke-width":1.2},g);
+  txt(cx, cy-8, lines, 11, "#fff", "middle", g);
+}
+
+/* ---- build diagram ---- */
+const ORANGE="#f59a52", OSTK="#b06a23", BLUE="#7da7e0", BSTK="#3f6fb0",
+      RED="#ef5347", PINK="#f5a8a8", PSTK="#c96e6e";
+
+// Application block
+const app = el("g",{class:"comp",id:"app"});
+el("rect",{x:350,y:14,width:224,height:40,fill:RED,stroke:"#9c2f26","stroke-width":1.4},app);
+txt(462,39,["Application"],14,"#1b1b1b","middle",app);
+box("bpsend",350,54,112,44,ORANGE,OSTK,["bp_send()"],13);
+box("bprecv",462,54,112,44,ORANGE,OSTK,["bp_receive()"],13);
+
+dbstack("rtdb", 90, 135, ["nodes,","routes,","hops"]);
+dbstack("fwddb", 90, 425, ["plans,","rules,","groups"]);
+
+box("ipnfw",195,235,90,44,ORANGE,OSTK,["ipnfw"],13);
+box("bpclm",195,315,90,44,ORANGE,OSTK,["bpclm"],13);
+
+cyl("delivq",790,175,46,40,["delivery","queue"]);
+cyl("fwdq",400,210,48,40,["forwarding","queue"]);
+cyl("txq",400,295,48,40,["transmission","queue"],11);
+cyl("txbuf",400,380,48,40,["transmission","buffer"],11);
+cyl("sdu",525,380,50,40,["service data units","(outbound block)"],10);
+cyl("segs",665,380,46,40,["LTP","segments"]);
+cyl("inblock",830,380,48,40,["LTP segments","(inbound block)"],10);
+
+const clo = el("g",{class:"comp",id:"ltpclo"});
+el("rect",{x:355,y:490,width:90,height:40,fill:ORANGE,stroke:OSTK,"stroke-width":1.4},clo);
+txt(400,515,["ltpclo"],13,"#1b1b1b","middle",clo);
+el("rect",{x:355,y:530,width:90,height:40,fill:BLUE,stroke:BSTK,"stroke-width":1.4},clo);
+txt(400,555,["ltp_send()"],13,"#1b1b1b","middle",clo);
+
+box("ltpmeter",480,530,100,40,BLUE,BSTK,["ltpmeter"],13);
+box("ltpcli",782,485,102,44,ORANGE,OSTK,["ltpcli"],13);
+box("lso",625,600,80,40,PINK,PSTK,["<LSO>"],13);
+box("lsi",735,600,80,40,PINK,PSTK,["<LSI>"],13);
+
+/* ---- flow definitions ---- */
+// Each step: {t:title, d:description, hl:[component ids], path:[[x,y]...] token polyline}
+const ROUTE = (verb) => [
+ {t:"ipnfw computes a route", hl:["ipnfw","rtdb","fwdq"],
+  path:[[354,210],[240,210],[240,257]],
+  d:"The ipn-scheme forwarder daemon <code>ipnfw</code> dequeues the bundle and "+verb+" — typically with Contact Graph Routing — consulting the <b>routing table</b> (nodes, routes, hops, built from the contact plan in working memory) to pick the <i>proximate node</i>: the best next-hop neighbor."},
+ {t:"Enqueued for the neighbor", hl:["txq","ipnfw"],
+  path:[[285,257],[400,257],[400,290]],
+  d:"<code>ipnfw</code> appends the bundle to one of three priority-ordered <b>transmission queues</b> (bulk / standard / expedited) maintained for that neighbor, matching the bundle's class of service. Higher-priority traffic will overtake it here."},
+ {t:"bpclm: rate control & outduct selection", hl:["bpclm","fwddb","txq"],
+  path:[[354,295],[240,295],[240,337]],
+  d:"The convergence-layer manager daemon <code>bpclm</code> serving this neighbor dequeues bundles in priority order, applies <b>rate control</b> against the neighbor's throttle (so transmission matches the contact's data rate), and uses the egress <b>plans / rules</b> in the forwarding database to pick the outduct — here, LTP."},
+ {t:"Into the transmission buffer", hl:["txbuf","bpclm"],
+  path:[[285,337],[400,337],[400,375]],
+  d:"A reference to the bundle is placed in the <b>transmission buffer</b> (the LTP outduct's queue). Still zero copies: the payload ZCO hasn't moved since it was written."},
+ {t:"ltpclo hands the bundle to LTP", hl:["ltpclo","txbuf"],
+  path:[[400,410],[400,510]],
+  d:"The LTP convergence-layer <i>output</i> daemon <code>ltpclo</code> takes the bundle from the buffer and calls <code>ltp_send()</code>, submitting it as a service data unit to the local LTP engine."},
+ {t:"Aggregation into an outbound block", hl:["sdu","ltpclo"],
+  path:[[445,510],[505,510],[505,415],[525,385]],
+  d:"<code>ltp_send()</code> appends the bundle to the LTP <b>block</b> currently being assembled for this destination engine. Several bundles are aggregated into one block to amortize LTP's per-block handshaking over more data."},
+ {t:"ltpmeter segments the block", hl:["ltpmeter","sdu"],
+  path:[[545,410],[545,550],[530,550]],
+  d:"When the block reaches its aggregation size or time limit, <code>ltpmeter</code> closes it and divides it into <b>LTP segments</b> sized to the link MTU. Red-part (reliable) segments will be retransmitted until the peer's reception reports show no gaps."},
+ {t:"Segments queued for the link", hl:["segs","ltpmeter"],
+  path:[[580,550],[650,550],[650,415],[665,385]],
+  d:"The segments wait in the SDR for the link service layer. ION keeps the data until LTP confirms complete red-part reception — this hop's reliability is LTP's job, while BP handles end-to-end store-and-forward."},
+ {t:"LSO radiates the segments", hl:["lso","segs"],
+  path:[[680,410],[680,620],[665,620]],
+  d:"The <b>link service output</b> task (e.g. <code>udplso</code> for UDP/IP, or a serial/CCSDS adapter on a spacecraft) transmits each segment over the physical link toward the neighboring node's LSI. The bundle is on its way. ✔"},
+];
+
+const RECEIVE = [
+ {t:"Segments arrive at the LSI", hl:["lsi","lso"],
+  path:[[705,620],[775,620]],
+  d:"The upstream node's LSO radiates LTP segments across the (possibly long-delay) link; the local <b>link service input</b> task (e.g. <code>udplsi</code>) catches them and passes each one to the LTP engine."},
+ {t:"Inbound block reassembly", hl:["inblock","lsi"],
+  path:[[772,600],[772,440],[810,440],[830,385]],
+  d:"Segments accumulate in the SDR as an <b>inbound block</b>. LTP sends report segments back to the sender; any missing red-part segments are retransmitted until the block is complete — reliability over this single hop, with no end-to-end chatter."},
+ {t:"ltpcli extracts the bundles", hl:["ltpcli","inblock"],
+  path:[[848,410],[848,507],[832,507]],
+  d:"Once the red part is complete, the LTP convergence-layer <i>input</i> daemon <code>ltpcli</code> reassembles the block and extracts every bundle that was aggregated into it. Each bundle is now <b>dispatched</b>: is its destination EID local, or another node?"},
+];
+
+const FLOWS = [
+ { name:"Locally generated bundle",
+   steps:[
+    {t:"Application calls bp_send()", hl:["app","bpsend"],
+     path:[[406,76]],
+     d:"The application names a destination endpoint (e.g. <code>ipn:27.0</code>) and hands over an application data unit. BP wraps it into a <b>bundle</b>; the payload is written once into the SDR heap as a <b>zero-copy object (ZCO)</b>. From here on only references move between tasks — never the data."},
+    {t:"Bundle joins the forwarding queue", hl:["fwdq","bpsend"],
+     path:[[406,98],[401,210],[400,210]],
+     d:"The bundle is appended to the <b>forwarding queue</b> in the SDR traffic database and the forwarder daemon's semaphore is signaled. Because the queue is in (notionally) non-volatile storage, the bundle survives a reboot while it waits."},
+    ...ROUTE("computes a route to the destination"),
+   ]},
+ { name:"Bundle received & forwarded (transit)",
+   steps:[
+    ...RECEIVE,
+    {t:"Destination is elsewhere → forwarding queue", hl:["fwdq","ltpcli"],
+     path:[[884,517],[922,517],[922,210],[450,210],[400,210]],
+     d:"This bundle's destination is <b>not</b> a local endpoint, so <code>ltpcli</code> appends it to the <b>forwarding queue</b> — the exact spot where a locally generated bundle starts. This is DTN <b>store-and-forward</b>: the bundle may now sit in the SDR for hours awaiting the next contact."},
+    ...ROUTE("recomputes the route from <i>this</i> node onward"),
+   ]},
+ { name:"Bundle received & delivered locally",
+   steps:[
+    ...RECEIVE,
+    {t:"Destination is local → delivery queue", hl:["delivq","ltpcli"],
+     path:[[884,505],[908,505],[908,175],[840,175],[790,175]],
+     d:"The destination EID matches an endpoint registered on <b>this</b> node, so the bundle goes to that endpoint's <b>delivery queue</b>. (Thanks to ZCO reference counting, a bundle that must also travel onward — e.g. multicast — could sit in a transmission queue at the same time without being copied.)"},
+    {t:"Application calls bp_receive()", hl:["app","bprecv","delivq"],
+     path:[[790,145],[790,76],[578,76],[518,76]],
+     d:"The application's <code>bp_receive()</code> call dequeues the bundle and hands the payload ZCO to the app, which extracts the original application data unit. When the last reference is released, the SDR storage is reclaimed. End-to-end delivery complete. ✔"},
+   ]},
+];
+
+/* ---- animation engine ---- */
+const token = document.getElementById("token");
+const stepnum = document.getElementById("stepnum"),
+      steptitle = document.getElementById("steptitle"),
+      stepdesc = document.getElementById("stepdesc"),
+      steplist = document.getElementById("steplist"),
+      playB = document.getElementById("playB"),
+      speedIn = document.getElementById("speed");
+
+let flow = -1, idx = -1, playing = false, raf = null, dwell = null;
+
+function speed(){ return parseFloat(speedIn.value); }
+function clearTimers(){ if(raf) cancelAnimationFrame(raf); raf=null; if(dwell) clearTimeout(dwell); dwell=null; }
+function setHL(ids){
+  document.querySelectorAll(".comp.hl").forEach(e=>e.classList.remove("hl"));
+  ids.forEach(id=>{ const e=document.getElementById(id); if(e) e.classList.add("hl"); });
+}
+function moveToken(x,y){ token.setAttribute("cx",x); token.setAttribute("cy",y); }
+
+function animatePath(path, done){
+  if(path.length<2){ moveToken(path[0][0],path[0][1]); done(); return; }
+  const lens=[0]; let total=0;
+  for(let i=1;i<path.length;i++){
+    total += Math.hypot(path[i][0]-path[i-1][0], path[i][1]-path[i-1][1]);
+    lens.push(total);
+  }
+  moveToken(path[0][0],path[0][1]);
+  let start=null;
+  function frame(ts){
+    if(start===null) start=ts;
+    const dist = (ts-start)/1000 * 170 * speed();
+    if(dist>=total){ moveToken(path[path.length-1][0],path[path.length-1][1]); raf=null; done(); return; }
+    let i=1; while(lens[i]<dist) i++;
+    const f=(dist-lens[i-1])/(lens[i]-lens[i-1]);
+    moveToken(path[i-1][0]+f*(path[i][0]-path[i-1][0]),
+              path[i-1][1]+f*(path[i][1]-path[i-1][1]));
+    raf=requestAnimationFrame(frame);
+  }
+  raf=requestAnimationFrame(frame);
+}
+
+function showStep(i, autoplay){
+  clearTimers();
+  const steps = FLOWS[flow].steps;
+  idx = Math.max(0, Math.min(i, steps.length-1));
+  const s = steps[idx];
+  stepnum.textContent = `Flow ${flow+1} · Step ${idx+1} / ${steps.length}`;
+  steptitle.textContent = s.t;
+  stepdesc.innerHTML = s.d;
+  setHL(s.hl);
+  [...steplist.children].forEach((li,j)=>li.classList.toggle("cur", j===idx));
+  token.style.visibility="visible";
+  animatePath(s.path, ()=>{
+    if(autoplay && playing){
+      if(idx < steps.length-1){
+        dwell = setTimeout(()=>showStep(idx+1,true), 2600/speed());
+      } else {
+        playing=false; playB.textContent="▶ Replay";
+      }
+    }
+  });
+}
+
+function buildList(){
+  steplist.innerHTML="";
+  FLOWS[flow].steps.forEach((s,j)=>{
+    const li=document.createElement("li");
+    li.textContent=s.t;
+    li.onclick=()=>{ playing=false; playB.textContent="▶ Play"; showStep(j,false); };
+    steplist.appendChild(li);
+  });
+}
+
+function selectFlow(f){
+  flow=f;
+  for(let k=0;k<3;k++) document.getElementById("fb"+k).classList.toggle("sel",k===f);
+  buildList();
+  playing=true; playB.textContent="⏸ Pause";
+  showStep(0,true);
+}
+function togglePlay(){
+  if(flow<0) return;
+  if(playing){ playing=false; playB.textContent="▶ Play"; clearTimers(); }
+  else{
+    playing=true; playB.textContent="⏸ Pause";
+    if(idx>=FLOWS[flow].steps.length-1) showStep(0,true); else showStep(idx,true);
+  }
+}
+function stepJump(d){
+  if(flow<0) return;
+  playing=false; playB.textContent="▶ Play";
+  showStep(idx+d,false);
+}
+function restart(){ if(flow<0) return; playing=true; playB.textContent="⏸ Pause"; showStep(0,true); }
+
+// deep link: open ion-bundle-flows.html#1 / #2 / #3 to auto-start a flow
+const h = parseInt(location.hash.slice(1),10);
+if(h>=1 && h<=3) selectFlow(h-1);
+</script>
+</body>
+</html>
